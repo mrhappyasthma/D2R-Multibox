@@ -1,0 +1,3 @@
+[submodule "deps/pywinhandle"]
+	path = deps/pywinhandle
+	url = https://github.com/yihleego/pywinhandle.git

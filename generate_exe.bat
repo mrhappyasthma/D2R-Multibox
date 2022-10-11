@@ -1,1 +1,1 @@
-pyinstaller -F -i icon.ico D2R.py
+pyinstaller -F -i icon.ico multibox_d2r.py

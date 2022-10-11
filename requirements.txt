@@ -1,0 +1,3 @@
+ctypes
+pyinstaller
+pywin32

@@ -15,7 +15,7 @@ This script looks to automate that process, by iterating through all the process
 
 ## Dependencies
 
-## Required installations:
+### Required installations:
 
 - Python 3
 - The following python modules:
@@ -25,7 +25,15 @@ python -m pip install pywin32
 python -m pip install ctypes
 ```
 
-## Internal Deps
+### Optional installations:
+
+To make a fresh exe, also install `pyinstaller`:
+
+```
+python -m pip install pyinstaller
+```
+
+### Internal Deps
 
 - https://github.com/yihleego/pywinhandle
 

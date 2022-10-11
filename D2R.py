@@ -1,6 +1,8 @@
 import ctypes
 from ctypes import wintypes
 import os
+import time
+
 from deps.pywinhandle.src import pywinhandle
 
 EnumWindows = ctypes.windll.user32.EnumWindows
@@ -87,7 +89,7 @@ def IterateChildProcessesInSnapshotForPID(process_id):
     PROGMainBase=False
     while ret :
         if me32.th32ParentProcessID == process_id and me32.szExeFile == b'D2R.exe':
-          ProcessIds.append(me32.th32ProcessID)
+          process_ids.append(me32.th32ProcessID)
           break;
         ret = Process32Next( hModuleSnap , ctypes.pointer(me32) )
     CloseHandle( hModuleSnap )
@@ -95,18 +97,33 @@ def IterateChildProcessesInSnapshotForPID(process_id):
     print("Error in ListProcessModules")
     print(e)
 
-def FindD2RCheckForOtherInstancesHandle(processIDs):
+def FindD2RCheckForOtherInstancesHandle(process_ids):
   suffix = 'DiabloII Check For Other Instances'
-  handles = pywinhandle.find_handles(process_ids=processIDs)
-  handles_to_close = []
+  handles = pywinhandle.find_handles(process_ids=process_ids)
+  d2r_handles = []
   for handle in handles:
     name = handle.get('name')
     if name and suffix in name:
-      handles_to_close.append(handle)
-  pywinhandle.close_handles(handles_to_close)
+      d2r_handles.append(handle)
+  return d2r_handles
 
 
-# Enumerate all of the windows looking for Battle.net > D2R.
-ProcessIds = []
-EnumWindows(EnumWindowsProc(foreach_window), 0)
-FindD2RCheckForOtherInstancesHandle(ProcessIds)
+print('Monitoring processes for D2R.exe...\n', flush=True)
+while True:
+  # Enumerate all of the windows looking for Battle.net > D2R.
+  process_ids = []  # Modified internally by the EnumWindowsProc call.
+  EnumWindows(EnumWindowsProc(foreach_window), 0)
+  if len(process_ids) == 0:
+    continue
+  d2r_handles = FindD2RCheckForOtherInstancesHandle(process_ids)
+  if len(d2r_handles) == 0:
+    continue
+  print(f'D2R "Check For Other Instances" handles detected! Closing Event handles {d2r_handles}\n', flush=True)
+  # TODO: Handle errors once the pywinhandle dependency is updated to surface them.
+  pywinhandle.close_handles(d2r_handles)
+  print("Handles closed! It's now safe to open a new D2R.exe.\n", flush=True)
+  
+  # Iterate only once per second to save some CPU cycles
+  time.sleep(1)
+
+  

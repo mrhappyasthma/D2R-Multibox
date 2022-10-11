@@ -37,10 +37,16 @@ python -m pip install pyinstaller
 
 - https://github.com/yihleego/pywinhandle
 
-## Running the script
+## Run
+
+### Downloading the standalone EXE
+
+You can download the latest release here: https://github.com/mrhappyasthma/D2R-Multibox/releases/tag/Latest
+
+### Running the script manually
 
 To run the script, simply run:
 
 ```
-python D2R.py
+python multibox_d2r.py
 ```

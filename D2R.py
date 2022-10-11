@@ -94,18 +94,21 @@ def IterateChildProcessesInSnapshotForPID(process_id):
         ret = Process32Next( hModuleSnap , ctypes.pointer(me32) )
     CloseHandle( hModuleSnap )
   except Exception as e:
-    print("Error in ListProcessModules")
-    print(e)
+    pass
 
 def FindD2RCheckForOtherInstancesHandle(process_ids):
-  suffix = 'DiabloII Check For Other Instances'
-  handles = pywinhandle.find_handles(process_ids=process_ids)
-  d2r_handles = []
-  for handle in handles:
-    name = handle.get('name')
-    if name and suffix in name:
-      d2r_handles.append(handle)
-  return d2r_handles
+  try:
+    suffix = 'DiabloII Check For Other Instances'
+    handles = pywinhandle.find_handles(process_ids=process_ids)
+    d2r_handles = []
+    for handle in handles:
+      name = handle.get('name')
+      if name and suffix in name:
+        d2r_handles.append(handle)
+    return d2r_handles
+  except Exception as e:
+    pass
+    
 
 
 print('Monitoring processes for D2R.exe...\n', flush=True)
@@ -119,9 +122,12 @@ while True:
   if len(d2r_handles) == 0:
     continue
   print(f'D2R "Check For Other Instances" handles detected! Closing Event handles {d2r_handles}\n', flush=True)
-  # TODO: Handle errors once the pywinhandle dependency is updated to surface them.
-  pywinhandle.close_handles(d2r_handles)
-  print("Handles closed! It's now safe to open a new D2R.exe.\n", flush=True)
+  try:
+    # TODO: Handle errors once the pywinhandle dependency is updated to surface them.
+    pywinhandle.close_handles(d2r_handles)
+    print("Handles closed! It's now safe to open a new D2R.exe.\n", flush=True)
+  except:
+    print("Failed to close handle. Something went terribly wrong :(");
   
   # Iterate only once per second to save some CPU cycles
   time.sleep(1)

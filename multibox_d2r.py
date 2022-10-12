@@ -119,7 +119,7 @@ while True:
   if len(process_ids) == 0:
     continue
   d2r_handles = FindD2RCheckForOtherInstancesHandle(process_ids)
-  if len(d2r_handles) == 0:
+  if d2r_handles is None or len(d2r_handles) == 0:
     continue
   print(f'D2R "Check For Other Instances" handles detected! Closing Event handles {d2r_handles}\n', flush=True)
   try:

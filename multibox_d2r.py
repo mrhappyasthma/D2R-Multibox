@@ -10,7 +10,6 @@ EnumWindowsProc = ctypes.WINFUNCTYPE(ctypes.c_bool, ctypes.POINTER(ctypes.c_int)
 GetWindowThreadProcessId = ctypes.windll.user32.GetWindowThreadProcessId
 GetWindowText = ctypes.windll.user32.GetWindowTextW
 GetWindowTextLength = ctypes.windll.user32.GetWindowTextLengthW
-IsWindowVisible = ctypes.windll.user32.IsWindowVisible
 GetClassName = ctypes.windll.user32.GetClassNameW
 OpenProcess = ctypes.windll.kernel32.OpenProcess
 CloseHandle = ctypes.windll.kernel32.CloseHandle
@@ -47,9 +46,6 @@ class PROCESSENTRY32(ctypes.Structure):
 #
 # Return `False` to stop iterating. Returning `True` is equivalent to "continue".
 def foreach_window(hwnd, lParam):
-  if not IsWindowVisible(hwnd):
-    return True
-
   # Determine if the window is of type `Chrome_WidgetWin_0`, which Spotify uses.
   buffer_length = 500
   buffer = ctypes.create_unicode_buffer(buffer_length)

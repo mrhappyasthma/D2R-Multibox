@@ -39,39 +39,49 @@ class PROCESSENTRY32(ctypes.Structure):
                  ("dwFlags", ctypes.wintypes.DWORD),
                  ("szExeFile", ctypes.c_char * 260)]
 
+
+def _get_process_id_for_handle(hwnd):
+  """Returns the process ID of the thread that created the window with the given handle."""
+  lpdw_process_id = ctypes.c_ulong()
+  GetWindowThreadProcessId(hwnd, ctypes.byref(lpdw_process_id))
+  return lpdw_process_id 
+
+def _get_name_for_process_with_id(process_id):
+  """Determines the process's exectuable name for a given process ID."""
+  PROCESS_VM_READ = 0x0010
+  PROCESS_QUERY_INFORMATION = 0x0400
+  process_handle = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, False, process_id)
+  buffer_length = 500
+  buffer = ctypes.create_unicode_buffer(buffer_length)
+  GetProcessImageFileName(process_handle, buffer, buffer_length)
+  executable_name = os.path.basename(buffer.value)
+  CloseHandle(process_handle)
+  return executable_name
+
 # Iterate all windows searching for Battle.net.exe. If it exists, then iterate
 # the child processes looking for D2R.
 #
 # NOTE: This function modifies global state.
 #
 # Return `False` to stop iterating. Returning `True` is equivalent to "continue".
-def foreach_window(hwnd, lParam):
-  # Determine if the window is of type `Chrome_WidgetWin_0`, which Spotify uses.
-  buffer_length = 500
-  buffer = ctypes.create_unicode_buffer(buffer_length)
-  GetClassName(hwnd, buffer, buffer_length)
-  if buffer.value != 'Chrome_WidgetWin_0':
-    return True
-
-  # Determine if this process is Spotify.exe
-  lpdw_process_id = ctypes.c_ulong()
-  GetWindowThreadProcessId(hwnd, ctypes.byref(lpdw_process_id))
-  PROCESS_VM_READ = 0x0010
-  PROCESS_QUERY_INFORMATION = 0x0400
-  process_handle = OpenProcess(PROCESS_QUERY_INFORMATION | PROCESS_VM_READ, False, lpdw_process_id)
-  buffer = ctypes.create_unicode_buffer(buffer_length)
-  GetProcessImageFileName(process_handle, buffer, buffer_length)
-  executable_name = os.path.basename(buffer.value)
-  CloseHandle(process_handle)
+def _foreach_window(hwnd, lParam):
+  # Determine if this process is "Battle.net.exe"
+  process_id_ptr = _get_process_id_for_handle(hwnd)
+  executable_name = _get_name_for_process_with_id(process_id_ptr)
   if executable_name != "Battle.net.exe":
     return True
 
-  IterateChildProcessesInSnapshotForPID(lpdw_process_id.value)
-  # Always continue, as there may be more than one D2R open
+  d2r_PIDs = _find_D2R_exe_child_processes_in_snapshot_for_PID(process_id_ptr.value)
+  for d2r_PID in d2r_PIDs:
+    _g_process_ids.append(d2r_PID)
+
+  # Always continue, as there may be more than one D2R window open.
   return True
 
 
-def IterateChildProcessesInSnapshotForPID(process_id):
+def _find_D2R_exe_child_processes_in_snapshot_for_PID(process_id):
+  """Iterate through the child processes looking for "D2R.exe" and storing its ."""
+  child_processes = []
   try:
     hModuleSnap = ctypes.wintypes.DWORD
     me32 = PROCESSENTRY32()
@@ -81,18 +91,17 @@ def IterateChildProcessesInSnapshotForPID(process_id):
     if ret == 0 :
         print('ListProcessModules() Error on Process32First[%d]' % GetLastError())
         CloseHandle( hModuleSnap )
-    global PROGMainBase
-    PROGMainBase=False
-    while ret :
+    while ret:
         if me32.th32ParentProcessID == process_id and me32.szExeFile == b'D2R.exe':
-          process_ids.append(me32.th32ProcessID)
-          break;
+          child_processes.append(me32.th32ProcessID)
         ret = Process32Next( hModuleSnap , ctypes.pointer(me32) )
     CloseHandle( hModuleSnap )
   except Exception as e:
     pass
+  return child_processes
 
-def FindD2RCheckForOtherInstancesHandle(process_ids):
+
+def _find_D2R_CheckForOtherInstances_handle(process_ids):
   try:
     suffix = 'DiabloII Check For Other Instances'
     handles = pywinhandle.find_handles(process_ids=process_ids)
@@ -104,28 +113,37 @@ def FindD2RCheckForOtherInstancesHandle(process_ids):
     return d2r_handles
   except Exception as e:
     pass
-    
 
 
-print('Monitoring processes for D2R.exe...\n', flush=True)
-while True:
-  # Enumerate all of the windows looking for Battle.net > D2R.
-  process_ids = []  # Modified internally by the EnumWindowsProc call.
-  EnumWindows(EnumWindowsProc(foreach_window), 0)
-  if len(process_ids) == 0:
-    continue
-  d2r_handles = FindD2RCheckForOtherInstancesHandle(process_ids)
-  if d2r_handles is None or len(d2r_handles) == 0:
-    continue
-  print(f'D2R "Check For Other Instances" handles detected! Closing Event handles {d2r_handles}\n', flush=True)
-  try:
-    # TODO: Handle errors once the pywinhandle dependency is updated to surface them.
-    pywinhandle.close_handles(d2r_handles)
-    print("Handles closed! It's now safe to open a new D2R.exe.\n", flush=True)
-  except:
-    print("Failed to close handle. Something went terribly wrong :(");
+# Global variable to store PIDs found by enumerating each window with
+# EnumWindows/EnumWindowsProc.
+_g_process_ids = []
+
+
+def main():
+  print('Monitoring processes for D2R.exe...\n', flush=True)
+  while True:
+    _g_process_ids.clear() # Modified by the EnumWindowsProc call.
+    # Enumerate all of the windows looking for Battle.net -> D2R.
+    EnumWindows(EnumWindowsProc(_foreach_window), 0)
+    if len(_g_process_ids) == 0:
+      continue
+    d2r_handles = _find_D2R_CheckForOtherInstances_handle(_g_process_ids)
+    if d2r_handles is None or len(d2r_handles) == 0:
+      continue
+    print(f'D2R "Check For Other Instances" handles detected! Closing Event handles {d2r_handles}\n', flush=True)
+    try:
+      # TODO: Handle errors once the pywinhandle dependency is updated to surface them.
+      pywinhandle.close_handles(d2r_handles)
+      print("Handles closed! It's now safe to open a new D2R.exe.\n", flush=True)
+    except:
+      print("Failed to close handle. Something went terribly wrong :(");
   
-  # Iterate only once per second to save some CPU cycles
-  time.sleep(1)
+    # Iterate only once per second to save some CPU cycles
+    time.sleep(1)
+
+
+if __name__ == "__main__":
+    main()
 
   
